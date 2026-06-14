@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alx.Sandrix tools</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <style>
+  body {
+  margin-bottom: 60px; /* отступ под футер */
+  }    
+
+ .coffee-btn {
+    position: fixed;
+    bottom: 20px;      /* отступ снизу */
+    right: 20px;       /* отступ справа */
+    background-color: #ffb347;
+    color: #222;
+    font-size: 12px;
+    padding: 10px 28px;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: 0.3s;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+    z-index: 1000;
+  }
+
+  .coffee-btn:hover {
+    background-color: #ff9800;
+    transform: scale(1.05);
+  }
+
+  /* Модальное окно */
+  .modal {
+    display: none;
+    position: fixed;
+    z-index: 10;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0,0,0,0.7);
+  }
+
+  .modal-content {
+    background-color: #1e1e1e;
+    margin: 10% auto;
+    padding: 25px;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 400px;
+    box-shadow: 0 0 20px #ffb347;
+    animation: fadeIn 0.3s ease;
+  }
+
+  @keyframes fadeIn {
+    from {opacity: 0; transform: translateY(-20px);}
+    to {opacity: 1; transform: translateY(0);}
+  }
+
+  .close {
+    color: #aaa;
+    float: right;
+    font-size: 26px;
+    font-weight: bold;
+    cursor: pointer;
+  }
+
+  .close:hover {
+    color: #fff;
+  }
+
+ .wallet {
+  display: flex;
+  flex-direction: column;
+  background: #fcfcfc;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  font-family: monospace;
+  word-wrap: break-word;
+  position: relative;
+}
+
+
+  .modal h3 {
+    text-align: center;
+    margin-bottom: 15px;
+    color: #ffb347;
+  }
+
+.copy-btn {
+  align-self: flex-end;
+  margin-top: 6px;
+  background-color: #ffb347;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  color: #222;
+  font-size: 8px;
+  transition: 0.2s;
+}
+
+.copy-btn:hover {
+  background-color: #ff9800;
+  transform: scale(1.05);
+}
+
+.wallet-address {
+  flex-grow: 1;
+  margin-left: 8px;
+  color: #333;
+}
+
+.copy-toast {
+  visibility: hidden;
+  min-width: 200px;
+  background-color: #333;
+  color: #fff;
+  text-align: center;
+  border-radius: 8px;
+  padding: 10px;
+  position: fixed;
+  bottom: 30px;
+  right: 30px;
+  z-index: 2000;
+  font-size: 16px;
+  opacity: 0;
+  transition: opacity 0.5s, bottom 0.5s;
+}
+
+.copy-toast.show {
+  visibility: visible;
+  opacity: 1;
+  bottom: 60px;
+}
+
+/* Кнопка */
+.floating-btn {
+  position: fixed;
+  bottom: 15px;
+  right: 20px;
+  background: linear-gradient(135deg, #ffb347, #ffcc33);
+  color: #000;
+  padding: 12px 22px;
+  border-radius: 30px;
+  font-weight: bold;
+  box-shadow: 0 0 10px rgba(255, 179, 71, 0.6);
+  cursor: pointer;
+  z-index: 999; /* выше, чем у footer */
+  transition: all 0.3s ease;
+}
+
+/* Для мобильных — кнопка наезжает на текст footer */
+@media (max-width: 600px) {
+  .floating-btn {
+    bottom: 25px; /* чуть выше футера */
+    left: 50%;
+    transform: translateX(-50%);
+    right: auto;
+  }
+}
+
+@media (max-width: 480px) { 
+  .mobile {
+  text-align: left;
+  } 
+ }
+
+  .footer {
+  text-align: center;
+  padding-top: 15px;
+  background-color: #1e1e1e;
+  color: #ffb347;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  font-size: 14px;
+  box-shadow: 0 -2px 10px rgba(0,0,0,0.3);
+  z-index: 500;
+}
+</style>
+</head>
+    <body class="container mt-5">
+
+  <h1 class="text-center mb-4">Alx.Sandrix Tools ⚙️</h1>
+
+  <!-- Вкладки -->
+  <ul class="nav nav-tabs" id="myTab" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active" id="calc-tab" data-bs-toggle="tab" data-bs-target="#calc" type="button" role="tab">Veles усреднения</button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tools-tab" data-bs-toggle="tab" data-bs-target="#tools" type="button" role="tab">SPOT</button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="orderSize-tab" data-bs-toggle="tab" data-bs-target="#orderSize" type="button" role="tab">Спот/DCA</button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="gridBot-tab" data-bs-toggle="tab" data-bs-target="#gridBot" type="button" role="tab">Grid Bots</button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="orderFutersDca-tab" data-bs-toggle="tab" data-bs-target="#orderFutersDca" type="button" role="tab">OKX Features DCA</button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="profitVProsentax-tab" data-bs-toggle="tab" data-bs-target="#profitVProsentax" type="button" role="tab">Когда продавать</button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="about-tab" data-bs-toggle="tab" data-bs-target="#about" type="button" role="tab">О проекте</button>
+    </li>
+  </ul>
+
+  <!-- Контент вкладок -->
+  <div class="tab-content mt-4" id="myTabContent">
+
+    <!-- Вкладка 1 -->
+    <div class="tab-pane fade show active" id="calc" role="tabpanel">
+      <div class="card p-4">
+        <h2 class="mb-3">Рассчет усреднения на Veles</h2>
+        <div class="mb-3">
+          <label for="num1" class="form-label">Количество монет</label>
+          <input type="number" id="num1" class="form-control" placeholder="Введите сколько монет" pattern="[0-9,]*" inputmode="decimal">
+        </div>
+        <div class="mb-3">
+          <label for="num2" class="form-label">По какой цене</label>
+          <input type="number" id="num2" class="form-control" placeholder="Введите цену" pattern="[0-9,]*" inputmode="decimal">
+        </div>
+        <div class="mb-3">
+          <label for="num3" class="form-label">Ваше текущее плечо в боте</label>
+          <input type="number" id="num3" class="form-control" placeholder="Введите плечо бота" pattern="[0-9,]*" inputmode="decimal">
+        </div>
+        <button class="btn btn-primary" onclick="calculate001()">Вычислить</button>
+        <button class="btn btn-secondary ms-2" onclick="clearFields()">Очистить</button>
+        <h3 class="mt-3">Результат: <span id="result">0</span> USDT для усреднения</h3>
+      </div>
+    </div>
+
+    <!-- Вкладка 2 -->
+    <div class="tab-pane fade" id="tools" role="tabpanel">
+      <div class="card p-4">
+        <h2>Вычислить прибыль на споте</h2>
+        <div class="row">
+            <div class="col-md-2 col-xs-8">
+              <input type="number" class="form-control" id="input1" placeholder="Кол-во монет" readonly>
+            </div>
+            <div class="col-md-2 col-xs-8">
+              <input type="number" class="form-control" id="input2" placeholder="Вложения $" pattern="[0-9,]*" inputmode="decimal">
+            </div>
+            <div class="col-md-2 col-xs-8">
+              <input type="number" class="form-control" id="input3" placeholder="Цена покупки" pattern="[0-9,]*" inputmode="decimal">
+            </div>
+            <div class="col-md-2 col-xs-8">
+              <input type="number" class="form-control" id="input7" placeholder="Комиссия покупки" pattern="[0-9,]*" inputmode="decimal">
+            </div>
+          </div>
+          <div class="container">
+            <br>
+          </div>
+          <div class="row">
+            <div class="col-md-2 col-xs-8">
+              <input type="number" class="form-control" id="input4" placeholder="Цена продажи" pattern="[0-9,]*" inputmode="decimal">
+            </div>
+            <div class="col-md-2 col-xs-8">
+              <input type="number" class="form-control" id="input5" placeholder="Общая прибыль" readonly>
+              <div id="indicator" class="bg-success"></div>
+            </div>
+            <div class="col-md-2 col-xs-8">
+              <input type="number" class="form-control" id="input6" placeholder="Чистая прибыль" readonly>
+            </div>
+            <div class="col-md-2 col-xs-8">
+              <input type="number" class="form-control" id="input8" placeholder="Комиссия продажи" pattern="[0-9,]*" inputmode="decimal">
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-md-8  col-xs-8">
+              <button type="button" class="btn btn-primary btn-block" onclick="calculaterent()">Calculate</button>
+            </div>
+          </div>
+      </div>
+    </div>
+
+   <!-- Вкладка 3 -->
+    <div class="tab-pane fade" id="orderSize" role="tabpanel">
+      <div class="card p-4">
+      <h2>Рассчет профита с одного цикла для Grid ботов и Фючерсных DCA</h2>
+<div class="calculator">
+  <label>Профит за цикл с одного ордера:</label>
+  <input type="number" id="a1" step="0.0001" placeholder="0.0617" pattern="[0-9,]*" inputmode="decimal">
+
+  <label>Желаемый профит за цикл:</label>
+  <input type="number" id="b1" step="0.0001" placeholder="0.1" pattern="[0-9,]*" inputmode="decimal">
+
+  <div class="result">
+    Насколько нужно умножить текущий депозит что бы получать желаемый профит: <span id="c1">—</span>
+  </div>
+    </div>
+    <p> - Для фючерсного DCA нужно умножать первый начальный ордер.</p>
+    <p> - Для спотовых Grid нужно или открывать заново с новым депозитом или нажать кнопку "Инвестировать еще"</p>
+    <p> - Для Veles нужно увеличивать целый депозит что бы добиться желаемой прибыли с первого ордера</p>
+      </div>
+    </div>
+
+     <!-- Вкладка 4 -->
+    <div class="tab-pane fade" id="gridBot" role="tabpanel">
+      <div class="card p-4">
+        <h2>Рассчет прибыли в сетке Grid-бота</h2>
+        <div class="gridcalc-wrapper">
+  <h2>Прибыль на сетку Grid-бота</h2>
+
+  <div class="gridcalc-group">
+    <label class="gridcalc-label">Сумма инвестиций (USDT)</label>
+    <input type="number" id="gridcalc-invest" class="gridcalc-input" value="15" step="0.01" pattern="[0-9,]*" inputmode="decimal">
+  </div>
+
+  <div class="gridcalc-group">
+    <label class="gridcalc-label">Количество сеток</label>
+    <input type="number" id="gridcalc-grids" class="gridcalc-input" value="15" step="1" pattern="[0-9,]*" inputmode="decimal">
+  </div>
+
+  <div class="gridcalc-group">
+    <label class="gridcalc-label">Прибыль по сетке (%)</label>
+    <input type="number" id="gridcalc-profit" class="gridcalc-input" value="1.5" step="0.01" pattern="[0-9,]*" inputmode="decimal">
+  </div>
+
+  <div class="gridcalc-group">
+    <label class="gridcalc-label">Комиссия покупки (%)</label>
+    <input type="number" id="gridcalc-buyfee" class="gridcalc-input" value="0.1" step="0.01" pattern="[0-9,]*" inputmode="decimal">
+  </div>
+
+  <div class="gridcalc-group">
+    <label class="gridcalc-label">Комиссия продажи (%)</label>
+    <input type="number" id="gridcalc-sellfee" class="gridcalc-input" value="0.1" step="0.01" pattern="[0-9,]*" inputmode="decimal">
+  </div>
+
+  <button class="gridcalc-button" onclick="gridcalcCalculate()">Рассчитать прибыль</button>
+
+  <div class="gridcalc-result" id="gridcalc-result">
+    Введите данные и нажмите "Рассчитать"
+  </div>
+
+  <div class="gridcalc-divider"></div>
+
+  <h3 style="text-align:center; color:#ffd580;">📆 ROI за период</h3>
+  
+  <div class="gridcalc-group">
+    <label class="gridcalc-label">Количество срабатываний ордеров в день</label>
+    <input type="number" id="gridcalc-fires" class="gridcalc-input" value="10" step="1" oninput="gridcalcRecalcROI()">
+  </div>
+
+  <div class="gridcalc-result" id="gridcalc-roiresult">
+    Введите данные выше для расчета ROI за день, неделю и месяц.
+  </div>
+</div>
+      </div>
+    </div>
+
+     <!-- Вкладка 5 -->
+    <div class="tab-pane fade" id="orderFutersDca" role="tabpanel">
+      <div class="card p-4">
+        <h2>Рассчет новой средней цены для биржевых фючерсных ботов на OKX</h2>
+        <div class="tpcalc-wrapper">
+           <div class="tpcalc-container">
+  <h3>🧮 Take-Profit Averaging</h3>
+  <div class="tpcalc-inputs">
+    <label>Количество (текущая позиция):</label>
+    <input type="number" id="tpcalc-q1" step="0.0001" placeholder="Например: 0.12" pattern="[0-9,]*" inputmode="decimal">
+
+    <label>Текущая цена входа / тейк-профит ($):</label>
+    <input type="number" id="tpcalc-p1" step="0.01" placeholder="Например: 4441.58" pattern="[0-9,]*" inputmode="decimal">
+
+    <label>Текущая рыночная цена ($):</label>
+    <input type="number" id="tpcalc-p2" step="0.01" placeholder="Например: 4000" pattern="[0-9,]*" inputmode="decimal">
+
+    <label>Желаемый тейк-профит ($):</label>
+    <input type="number" id="tpcalc-target" step="0.01" placeholder="Например: 4100" pattern="[0-9,]*" inputmode="decimal">
+
+    <label>Плечо (x):</label>
+    <input type="number" id="tpcalc-leverage" step="0.1" placeholder="Например: 5" pattern="[0-9,]*" inputmode="decimal">
+
+    <button onclick="tpcalc()">Рассчитать</button>
+  </div>
+
+  <div class="tpcalc-output" id="tpcalc-output"></div>
+</div>
+</div>
+      </div>
+    </div>
+
+    <!-- Вкладка 6 -->
+    <div class="tab-pane fade" id="profitVProsentax" role="tabpanel">
+      <div class="card p-4">
+        <h2>Рассчет по какой цене нужно продать по желаемом % от цены покупки  </h2>
+        <div class="profitcalc-wrapper">
+  <h2>Рассчет когда продавать</h2>
+  
+  <div class="profitcalc-group">
+    <label class="profitcalc-label">Цена покупки (USDT)</label>
+    <input type="number" id="profitcalc-buy" class="profitcalc-input" value="190.50" step="0.01">
+  </div>
+
+  <div class="profitcalc-group">
+    <label class="profitcalc-label">Тейк-профит (%)</label>
+    <input type="number" id="profitcalc-tp" class="profitcalc-input" value="0.11" step="0.01">
+  </div>
+
+  <div class="profitcalc-group">
+    <label class="profitcalc-label">Комиссия покупки (%)</label>
+    <input type="number" id="profitcalc-buyfee" class="profitcalc-input" value="0.10" step="0.01">
+  </div>
+
+  <div class="profitcalc-group">
+    <label class="profitcalc-label">Комиссия продажи (%)</label>
+    <input type="number" id="profitcalc-sellfee" class="profitcalc-input" value="0.10" step="0.01">
+  </div>
+
+  <button class="profitcalc-button" onclick="profitcalcCalculate()">Рассчитать цену продажи</button>
+
+  <div class="profitcalc-result" id="profitcalc-result">Введите данные и нажмите "Рассчитать"</div>
+</div>
+      </div>
+    </div>
+
+      <!-- Вкладка 7 -->
+    <div class="tab-pane fade" id="about" role="tabpanel">
+      <div class="card p-4">
+        <h2>О проекте</h2>
+        <p>Alx.Sandrix Tools — это набор удобных инструментов для трейдеров и инвесторов.  
+        Здесь вы можете быстро рассчитать усреднение, расходы и планировать сделки.</p>
+        <br>
+       <p>Социальные сети:</p>
+       <br>
+       <p>Биржи:</p>
+       <br>
+       <p>Ссылки:</p>
+        
+      </div>
+    </div>
+
+  </div>
+
+
+<button class="coffee-btn" id="openModal">Автору на кофе ☕</button>
+
+<div id="coffeeModal" class="modal">
+  <div class="modal-content">
+    <span class="close">&times;</span>
+    <h3>Поддержать автора 💰</h3>
+
+    <div class="wallet">
+      <strong>BTC:</strong><br>
+      <span class="wallet-address">bc1qsah2guunmechu5nrurtfy8yxjyqzzss2sfx3xk</span>
+      <button class="copy-btn" onclick="copyToClipboard('bc1qsah2guunmechu5nrurtfy8yxjyqzzss2sfx3xk')">📋</button>
+    </div>
+
+    <div class="wallet">
+      <strong>ETH (ERC20 of BASE):</strong><br>
+      <span class="wallet-address">0xA31Ac8776dE4b9286BA46bB7Ee9319a652912019</span>
+      <button class="copy-btn" onclick="copyToClipboard('0xA31Ac8776dE4b9286BA46bB7Ee9319a652912019')">📋</button>
+    </div>
+
+    <div class="wallet">
+      <strong>USDT (TRC20):</strong><br>
+      <span class="wallet-address">TXnmpYALCGr7hdx7hUHoqNZRvF8tucZ5wG</span>
+      <button class="copy-btn" onclick="copyToClipboard('TXnmpYALCGr7hdx7hUHoqNZRvF8tucZ5wG')">📋</button>
+      <br>
+      <strong>USDT (APTOS):</strong><br>
+      <span class="wallet-address">0x8b9ed9fe5d68d37fed233796e1fb4161529b6e9cf3a34233f3ded61bc9f7c543</span>
+      <button class="copy-btn" onclick="copyToClipboard('0x8b9ed9fe5d68d37fed233796e1fb4161529b6e9cf3a34233f3ded61bc9f7c543')">📋</button>
+      <br>
+      <strong>USDT (BSC BEP20, PLASMA USDT0, ARBITRUM, KAVA, MANTLE, BASE, ETH, OPTIMISM):</strong><br>
+      <span class="wallet-address">0x2426aCaD1A40399Efd37E84D5A688524335ea23B</span>
+      <button class="copy-btn" onclick="copyToClipboard('0x2426aCaD1A40399Efd37E84D5A688524335ea23B')">📋</button>
+    </div>
+
+    <div class="wallet">
+      <strong>USDC (BSC BEP20, OP, MANTLE, BASE, ARBITRUM, ):</strong><br>
+      <span class="wallet-address">0x2426aCaD1A40399Efd37E84D5A688524335ea23B</span>
+      <button class="copy-btn" onclick="copyToClipboard('0x2426aCaD1A40399Efd37E84D5A688524335ea23B')">📋</button>
+      <br>
+      <strong>USDC (SOLANA):</strong><br>
+      <span class="wallet-address">GzDQSsJjrQBvJ3bvDbujZjE8Zz9ec8FqvEvN1VAJxctS</span>
+      <button class="copy-btn" onclick="copyToClipboard('GzDQSsJjrQBvJ3bvDbujZjE8Zz9ec8FqvEvN1VAJxctS')">📋</button>
+      <br>
+      <strong>USDC (APT):</strong><br>
+      <span class="wallet-address">0x8b9ed9fe5d68d37fed233796e1fb4161529b6e9cf3a34233f3ded61bc9f7c543</span>
+      <button class="copy-btn" onclick="copyToClipboard('0x8b9ed9fe5d68d37fed233796e1fb4161529b6e9cf3a34233f3ded61bc9f7c543')">📋</button>
+      
+    </div>
+
+    <div class="wallet">
+      <strong>SOLANA:</strong><br>
+      <span class="wallet-address">3ARWBC4vcCJR2fzJYcabKdECRPf4amU8s9jduYqcYhkC</span>
+      <button class="copy-btn" onclick="copyToClipboard('3ARWBC4vcCJR2fzJYcabKdECRPf4amU8s9jduYqcYhkC')">📋</button>
+    </div>
+
+     <div class="wallet">
+      <strong>SUI:</strong><br>
+      <span class="wallet-address">0xb4013d0097ed199887df727ddf0409842b4af155192e047a6fa38dac36ee375d</span>
+      <button class="copy-btn" onclick="copyToClipboard('0xb4013d0097ed199887df727ddf0409842b4af155192e047a6fa38dac36ee375d')">📋</button>
+    </div>
+  </div>
+</div>
+<div id="copyToast" class="copy-toast">Адрес скопирован ✅</div>
+
+<footer class="footer">
+  <p class="mobile">🔥 Биржи: <a href="https://okx.com/join/32603669" target="_blank" rel="noopener noreferrer">OKX</a> | <a href="https://bingx.com/partner/craftcoin10/" target="_blank" rel="noopener noreferrer">BingX</a></p>
+  © 2025 CraftoCoin tools — сделано с ☕ и 💛
+</footer>
+
+  <script src="./calc.js"></script>
+  <script src="./modal.js"></script>
+  <script src="./spotcals.js"></script>
+  <script src="./walletcopy.js"></script>
+  <script src="./spotorderprofit.js"></script>
+  <script src="./gridbot.js"></script>
+  <script src="./dcaTP.js"></script>
+  <script src="./orderprof.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
