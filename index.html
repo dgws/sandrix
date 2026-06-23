@@ -1122,6 +1122,40 @@ function profitcalcCalculate() {
 }
 
 /* ── TAB: Топ перегретых ── */
+let _hotCountdownVal = 60;
+let _hotCountdownInterval = null;
+
+// Останавливаем автообновление при уходе с вкладки
+document.getElementById('tabNav').addEventListener('click', function(e) {
+  const btn = e.target.closest('.tab-btn');
+  if (btn && btn.dataset.tab !== 'tab-hot') _hotStopAuto();
+});
+
+function _hotStopAuto() {
+  if (_hotCountdownInterval) { clearInterval(_hotCountdownInterval); _hotCountdownInterval = null; }
+  const cd = document.getElementById('hotcoins-countdown');
+  if (cd) cd.textContent = '';
+}
+
+function _hotStartAuto() {
+  _hotStopAuto();
+  _hotCountdownVal = 60;
+  _hotUpdateCountdown();
+  _hotCountdownInterval = setInterval(function() {
+    _hotCountdownVal--;
+    _hotUpdateCountdown();
+    if (_hotCountdownVal <= 0) {
+      _hotStopAuto();
+      hotcoinsScan();
+    }
+  }, 1000);
+}
+
+function _hotUpdateCountdown() {
+  const cd = document.getElementById('hotcoins-countdown');
+  if (cd) cd.textContent = '🔄 авто через ' + _hotCountdownVal + 'с';
+}
+
 function fetchWithTimeout(url, ms) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), ms || 8000);
@@ -1134,12 +1168,7 @@ async function fetchBinanceTickers() {
   const data = await res.json();
   return data
     .filter(t => t.symbol.endsWith('USDT') && !t.symbol.includes('_'))
-    .map(t => ({
-      coin: t.symbol.replace(/USDT$/, ''),
-      exchange: 'Binance',
-      pct: parseFloat(t.priceChangePercent),
-      vol: parseFloat(t.quoteVolume)
-    }))
+    .map(t => ({ coin: t.symbol.replace(/USDT$/, ''), exchange: 'Binance', pct: parseFloat(t.priceChangePercent), vol: parseFloat(t.quoteVolume) }))
     .filter(t => !isNaN(t.pct) && !isNaN(t.vol));
 }
 
@@ -1161,12 +1190,9 @@ async function fetchBinanceOiChange(coin) {
   const res = await fetchWithTimeout('https://fapi.binance.com/futures/data/openInterestHist?symbol=' + coin + 'USDT&period=1h&limit=2');
   if (!res.ok) throw new Error('Binance OI HTTP ' + res.status);
   const data = await res.json();
-  const list = (data || [])
-    .map(row => ({ ts: parseInt(row.timestamp), oi: parseFloat(row.sumOpenInterestValue) }))
-    .sort((a, b) => a.ts - b.ts);
+  const list = (data || []).map(row => ({ ts: parseInt(row.timestamp), oi: parseFloat(row.sumOpenInterestValue) })).sort((a, b) => a.ts - b.ts);
   if (list.length < 2) return null;
-  const prev = list[list.length - 2].oi;
-  const cur = list[list.length - 1].oi;
+  const prev = list[list.length - 2].oi, cur = list[list.length - 1].oi;
   return prev ? ((cur - prev) / prev) * 100 : null;
 }
 
@@ -1177,13 +1203,7 @@ async function fetchBybitTickers() {
   const list = (data && data.result && data.result.list) || [];
   return list
     .filter(t => t.symbol.endsWith('USDT') && !t.symbol.includes('-'))
-    .map(t => ({
-      coin: t.symbol.replace(/USDT$/, ''),
-      exchange: 'Bybit',
-      pct: parseFloat(t.price24hPcnt) * 100,
-      vol: parseFloat(t.turnover24h),
-      funding: parseFloat(t.fundingRate) * 100
-    }))
+    .map(t => ({ coin: t.symbol.replace(/USDT$/, ''), exchange: 'Bybit', pct: parseFloat(t.price24hPcnt) * 100, vol: parseFloat(t.turnover24h), funding: parseFloat(t.fundingRate) * 100 }))
     .filter(t => !isNaN(t.pct) && !isNaN(t.vol));
 }
 
@@ -1191,12 +1211,9 @@ async function fetchBybitOiChange(coin) {
   const res = await fetchWithTimeout('https://api.bybit.com/v5/market/open-interest?category=linear&symbol=' + coin + 'USDT&intervalTime=1h&limit=2');
   if (!res.ok) throw new Error('Bybit OI HTTP ' + res.status);
   const data = await res.json();
-  const list = ((data && data.result && data.result.list) || [])
-    .map(row => ({ ts: parseInt(row.timestamp), oi: parseFloat(row.openInterest) }))
-    .sort((a, b) => a.ts - b.ts);
+  const list = ((data && data.result && data.result.list) || []).map(row => ({ ts: parseInt(row.timestamp), oi: parseFloat(row.openInterest) })).sort((a, b) => a.ts - b.ts);
   if (list.length < 2) return null;
-  const prev = list[list.length - 2].oi;
-  const cur = list[list.length - 1].oi;
+  const prev = list[list.length - 2].oi, cur = list[list.length - 1].oi;
   return prev ? ((cur - prev) / prev) * 100 : null;
 }
 
@@ -1208,15 +1225,9 @@ async function fetchOkxTickers() {
   return list
     .filter(t => t.instId.endsWith('-USDT-SWAP'))
     .map(t => {
-      const last = parseFloat(t.last);
-      const open = parseFloat(t.open24h);
+      const last = parseFloat(t.last), open = parseFloat(t.open24h);
       const pct = open ? ((last - open) / open) * 100 : NaN;
-      return {
-        coin: t.instId.replace('-USDT-SWAP', ''),
-        exchange: 'OKX',
-        pct: pct,
-        vol: parseFloat(t.volCcy24h)
-      };
+      return { coin: t.instId.replace('-USDT-SWAP', ''), exchange: 'OKX', pct: pct, vol: parseFloat(t.volCcy24h) };
     })
     .filter(t => !isNaN(t.pct) && !isNaN(t.vol));
 }
@@ -1235,18 +1246,14 @@ async function fetchOkxOiChange(coin) {
   const res = await fetchWithTimeout('https://www.okx.com/api/v5/rubik/stat/contracts/open-interest-volume?ccy=' + coin + '&period=1H');
   if (!res.ok) throw new Error('OKX OI HTTP ' + res.status);
   const data = await res.json();
-  const list = (data.data || [])
-    .map(row => ({ ts: parseInt(row[0]), oi: parseFloat(row[1]) }))
-    .sort((a, b) => a.ts - b.ts);
+  const list = (data.data || []).map(row => ({ ts: parseInt(row[0]), oi: parseFloat(row[1]) })).sort((a, b) => a.ts - b.ts);
   if (list.length < 2) return null;
-  const prev = list[list.length - 2].oi;
-  const cur = list[list.length - 1].oi;
+  const prev = list[list.length - 2].oi, cur = list[list.length - 1].oi;
   return prev ? ((cur - prev) / prev) * 100 : null;
 }
 
 async function fetchCoinDetails(coin, bestExch, binanceFundingMap, bybitFunding) {
-  let funding = null;
-  let oiChange = null;
+  let funding = null, oiChange = null;
   try {
     if (bestExch === 'Bybit') {
       funding = (bybitFunding != null && !isNaN(bybitFunding)) ? bybitFunding : null;
@@ -1255,41 +1262,67 @@ async function fetchCoinDetails(coin, bestExch, binanceFundingMap, bybitFunding)
       funding = (binanceFundingMap && binanceFundingMap[coin] != null) ? binanceFundingMap[coin] : null;
       oiChange = await fetchBinanceOiChange(coin).catch(() => null);
     } else if (bestExch === 'OKX') {
-      const res = await Promise.all([
-        fetchOkxFunding(coin).catch(() => null),
-        fetchOkxOiChange(coin).catch(() => null)
-      ]);
-      funding = res[0];
-      oiChange = res[1];
+      const res = await Promise.all([fetchOkxFunding(coin).catch(() => null), fetchOkxOiChange(coin).catch(() => null)]);
+      funding = res[0]; oiChange = res[1];
     }
-  } catch (e) {
-    // оставляем null, деградируем мягко
-  }
+  } catch (e) {}
   return { funding: funding, oiChange: oiChange };
 }
 
+// Fade Score — только памп + funding + OI. Шпаргалка и объём на скор не влияют.
 function computeFadeScore(bestPct, funding, oiChange, mode) {
-  const pumpAbs = Math.abs(bestPct);
-  const pumpScore = Math.min(40, (pumpAbs / 30) * 40);
-
+  const pumpScore = Math.min(40, (Math.abs(bestPct) / 30) * 40);
   let fundingScore = 0;
   if (funding !== null && !isNaN(funding)) {
-    const relevantFunding = mode === 'gainers' ? funding : -funding;
-    fundingScore = Math.min(30, Math.max(0, (relevantFunding / 0.1) * 30));
+    const f = mode === 'gainers' ? funding : -funding;
+    fundingScore = Math.min(30, Math.max(0, (f / 0.1) * 30));
   }
-
   let oiScore = 0;
   if (oiChange !== null && !isNaN(oiChange)) {
     oiScore = Math.min(30, Math.max(0, (oiChange / 15) * 30));
   }
-
   return Math.max(0, Math.min(100, Math.round(pumpScore + fundingScore + oiScore)));
+}
+
+// Шпаргалка — не влияет на скор, только читает те же данные
+function getShortHint(mode, funding, oiChange) {
+  if (funding === null) {
+    return { label: 'Данных мало ❓', color: 'var(--muted)', tip: 'Funding недоступен — невозможно оценить перекос рынка.' };
+  }
+  if (mode === 'gainers') {
+    if (funding > 0.05 && oiChange !== null && oiChange > 0) {
+      return { label: 'Шорт ✅', color: 'var(--success)', tip: 'Funding > 0.05% + OI растёт — классический fade. Ждите подтверждения на графике (RSI-дивергенция).' };
+    } else if (funding < -0.01) {
+      return { label: 'Не шортить ❌', color: 'var(--danger)', tip: 'Funding отрицательный — шорты уже набиты, высокий риск сквиза вверх.' };
+    } else if (funding > 0.01) {
+      return { label: 'Осторожно ⚠️', color: 'var(--gold)', tip: 'Funding слабоположительный — нет полного подтверждения. Ждите RSI-дивергенцию на 1H.' };
+    } else {
+      return { label: 'Нейтрально ⏸', color: 'var(--muted)', tip: 'Funding около нуля — рынок не определился. Пропустить.' };
+    }
+  } else {
+    if (funding < -0.05 && oiChange !== null && oiChange <= 0) {
+      return { label: 'Лонг / Сквиз 🔄', color: 'var(--gold)', tip: 'Funding < −0.05% + OI падает — шорт-сквиз назревает. Не шортить, рассмотреть лонг.' };
+    } else if (funding >= -0.01 && oiChange !== null && oiChange > 0) {
+      return { label: 'Шорт ✅', color: 'var(--success)', tip: 'Дамп продолжается: лонги не выкупают, OI растёт — продавцы контролируют рынок.' };
+    } else if (funding < -0.01) {
+      return { label: 'Осторожно ⚠️', color: 'var(--gold)', tip: 'Funding уходит в минус — шортисты накапливаются, риск резкого разворота вверх.' };
+    } else {
+      return { label: 'Нейтрально ⏸', color: 'var(--muted)', tip: 'Недостаточно данных для однозначного вывода.' };
+    }
+  }
+}
+
+function formatVol(v) {
+  if (!v || isNaN(v)) return '—';
+  if (v >= 1e9) return '$' + (v / 1e9).toFixed(2) + 'B';
+  if (v >= 1e6) return '$' + (v / 1e6).toFixed(1) + 'M';
+  if (v >= 1e3) return '$' + (v / 1e3).toFixed(0) + 'K';
+  return '$' + v.toFixed(0);
 }
 
 function fmtVal(v, decimals, suffix) {
   if (v === null || v === undefined || isNaN(v)) return '—';
-  const sign = v >= 0 ? '+' : '';
-  return sign + v.toFixed(decimals) + suffix;
+  return (v >= 0 ? '+' : '') + v.toFixed(decimals) + suffix;
 }
 
 async function hotcoinsScan() {
@@ -1299,7 +1332,7 @@ async function hotcoinsScan() {
   const resultEl = document.getElementById('hotcoins-result');
   const btn = document.querySelector('#tab-hot .btn-calc');
 
-  statusEl.textContent = '⏳ Загружаю данные с бирж...';
+  statusEl.innerHTML = '⏳ Загружаю данные с бирж...';
   resultEl.innerHTML = '';
   if (btn) btn.disabled = true;
 
@@ -1310,50 +1343,34 @@ async function hotcoinsScan() {
       { name: 'Bybit', fn: fetchBybitTickers }
     ];
 
-    const [settled, binanceFundingMapResult] = await Promise.all([
+    const [settled, binanceFundingMap] = await Promise.all([
       Promise.allSettled(sources.map(s => s.fn())),
       fetchBinanceFundingBulk().catch(() => ({}))
     ]);
 
-    const binanceFundingMap = binanceFundingMapResult || {};
-
-    let allTickers = [];
-    let okSources = [];
-    let failedSources = [];
-
+    let allTickers = [], okSources = [], failedSources = [];
     settled.forEach((res, i) => {
-      if (res.status === 'fulfilled') {
-        allTickers = allTickers.concat(res.value);
-        okSources.push(sources[i].name);
-      } else {
-        failedSources.push(sources[i].name + ' (' + (res.reason && res.reason.message ? res.reason.message : 'ошибка') + ')');
-      }
+      if (res.status === 'fulfilled') { allTickers = allTickers.concat(res.value); okSources.push(sources[i].name); }
+      else failedSources.push(sources[i].name + ' (' + (res.reason && res.reason.message ? res.reason.message : 'ошибка') + ')');
     });
 
     if (allTickers.length === 0) {
-      statusEl.innerHTML = '<span style="color:var(--danger);">❌ Не удалось получить данные ни с одной биржи: ' + failedSources.join(', ') + '</span>';
-      return;
+      statusEl.innerHTML = '<span style="color:var(--danger);">❌ Не удалось получить данные: ' + failedSources.join(', ') + '</span>';
+      _hotStartAuto(); return;
     }
 
     const filtered = allTickers.filter(t => t.vol >= minVol);
     const byCoin = {};
-    filtered.forEach(t => {
-      if (!byCoin[t.coin]) byCoin[t.coin] = {};
-      byCoin[t.coin][t.exchange] = t;
-    });
+    filtered.forEach(t => { if (!byCoin[t.coin]) byCoin[t.coin] = {}; byCoin[t.coin][t.exchange] = t; });
 
     const rows = Object.keys(byCoin).map(coin => {
       const exch = byCoin[coin];
-      let bestExch = null;
-      let bestPct = mode === 'gainers' ? -Infinity : Infinity;
+      let bestExch = null, bestPct = mode === 'gainers' ? -Infinity : Infinity;
       Object.keys(exch).forEach(ex => {
         const p = exch[ex].pct;
-        if (mode === 'gainers' ? p > bestPct : p < bestPct) {
-          bestPct = p;
-          bestExch = ex;
-        }
+        if (mode === 'gainers' ? p > bestPct : p < bestPct) { bestPct = p; bestExch = ex; }
       });
-      return { coin: coin, exch: exch, bestExch: bestExch, bestPct: bestPct };
+      return { coin, exch, bestExch, bestPct };
     });
 
     rows.sort((a, b) => mode === 'gainers' ? b.bestPct - a.bestPct : a.bestPct - b.bestPct);
@@ -1362,65 +1379,111 @@ async function hotcoinsScan() {
     if (top10.length === 0) {
       statusEl.innerHTML = '✅ Источники: ' + okSources.join(', ');
       resultEl.innerHTML = '<span class="result-empty">Нет монет, проходящих фильтр по объёму. Понизьте порог.</span>';
-      return;
+      _hotStartAuto(); return;
     }
 
     statusEl.innerHTML = '✅ Источники: ' + okSources.join(', ') +
       (failedSources.length ? ' &nbsp;|&nbsp; <span style="color:var(--danger);">не удалось: ' + failedSources.join(', ') + '</span>' : '') +
-      ' &nbsp;|&nbsp; ⏳ считаю funding/OI...';
+      ' &nbsp;|&nbsp; ⏳ funding / OI...';
 
     const detailsArr = await Promise.all(top10.map(r => {
       const bybitFunding = (r.exch['Bybit'] && r.exch['Bybit'].funding != null) ? r.exch['Bybit'].funding : null;
       return fetchCoinDetails(r.coin, r.bestExch, binanceFundingMap, bybitFunding);
     }));
 
-    statusEl.innerHTML = '✅ Источники: ' + okSources.join(', ') +
+    statusEl.innerHTML =
+      '✅ ' + okSources.join(', ') +
       (failedSources.length ? ' &nbsp;|&nbsp; <span style="color:var(--danger);">не удалось: ' + failedSources.join(', ') + '</span>' : '') +
-      ' &nbsp;|&nbsp; обновлено ' + new Date().toLocaleTimeString('ru-RU');
+      ' &nbsp;|&nbsp; ' + new Date().toLocaleTimeString('ru-RU') +
+      ' &nbsp;&nbsp;<span id="hotcoins-countdown" style="color:var(--gold);font-size:11px;"></span>';
 
     resultEl.innerHTML = top10.map((r, i) => {
+      const det = detailsArr[i] || { funding: null, oiChange: null };
+
+      // % по биржам
       const exchBadges = ['OKX', 'Binance', 'Bybit'].map(ex => {
         const d = r.exch[ex];
         if (!d) return '<span style="color:var(--muted);">' + ex + ': —</span>';
         const color = d.pct >= 0 ? 'var(--success)' : 'var(--danger)';
-        const sign = d.pct >= 0 ? '+' : '';
-        return '<span style="color:' + color + ';">' + ex + ': ' + sign + d.pct.toFixed(2) + '%</span>';
+        return '<span style="color:' + color + ';">' + ex + ': ' + (d.pct >= 0 ? '+' : '') + d.pct.toFixed(2) + '%</span>';
       }).join(' &nbsp;·&nbsp; ');
 
-      const pctColor = r.bestPct >= 0 ? 'var(--success)' : 'var(--danger)';
-      const pctSign = r.bestPct >= 0 ? '+' : '';
+      // Объём суммарный + по биржам (не влияет на скор)
+      const totalVol = Object.values(r.exch).reduce((s, ex) => s + (ex.vol && !isNaN(ex.vol) ? ex.vol : 0), 0);
+      const volByExch = ['OKX', 'Binance', 'Bybit']
+        .filter(ex => r.exch[ex] && !isNaN(r.exch[ex].vol))
+        .map(ex => '<span style="color:var(--muted);">' + ex + ':</span> ' + formatVol(r.exch[ex].vol))
+        .join(' &nbsp;·&nbsp; ');
 
-      const det = detailsArr[i] || { funding: null, oiChange: null };
+      // Ликвидность
+      const exchCount = Object.keys(r.exch).length;
+      const lowLiq = exchCount < 2;
+
+      // Fade Score (только памп + funding + OI)
       const score = computeFadeScore(r.bestPct, det.funding, det.oiChange, mode);
-      const scoreColor = score >= 70 ? 'var(--danger)' : (score >= 40 ? 'var(--gold)' : 'var(--muted)');
-      const scoreLabel = score >= 70 ? '🔥 Перегрето' : (score >= 40 ? '⚠️ Разогрето' : '😐 Слабо');
+      const scoreColor = score >= 70 ? 'var(--danger)' : score >= 40 ? 'var(--gold)' : 'var(--muted)';
+      const scoreLabel = score >= 70 ? '🔥 Перегрето' : score >= 40 ? '⚠️ Разогрето' : '😐 Слабо';
 
+      const pctColor = r.bestPct >= 0 ? 'var(--success)' : 'var(--danger)';
       const fundingColor = det.funding !== null && det.funding >= 0 ? 'var(--success)' : 'var(--danger)';
       const oiColor = det.oiChange !== null && det.oiChange >= 0 ? 'var(--success)' : 'var(--danger)';
 
+      // Шпаргалка (не влияет на скор)
+      const hint = getShortHint(mode, det.funding, det.oiChange);
+
       return '' +
         '<div class="wallet-card" style="margin-bottom:10px;">' +
-          '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">' +
-            '<div style="font-weight:700; font-size:15px; color:var(--text);">#' + (i + 1) + ' ' + r.coin + '/USDT</div>' +
-            '<div style="font-family:\'JetBrains Mono\',monospace; font-weight:700; font-size:16px; color:' + pctColor + ';">' + pctSign + r.bestPct.toFixed(2) + '%</div>' +
-          '</div>' +
-          '<div style="font-size:12px; margin-bottom:8px;">' + exchBadges + '</div>' +
-          '<div style="display:flex; gap:16px; font-size:11px; color:var(--muted); margin-bottom:8px;">' +
-            '<span>Funding (' + r.bestExch + '): <span style="color:' + fundingColor + ';">' + fmtVal(det.funding, 4, '%') + '</span></span>' +
-            '<span>OI Δ1ч (' + r.bestExch + '): <span style="color:' + oiColor + ';">' + fmtVal(det.oiChange, 2, '%') + '</span></span>' +
-          '</div>' +
-          '<div style="display:flex; align-items:center; gap:8px;">' +
-            '<div style="flex:1; height:6px; background:var(--surface2); border-radius:4px; overflow:hidden;">' +
-              '<div style="width:' + score + '%; height:100%; background:' + scoreColor + ';"></div>' +
+
+          // Заголовок
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">' +
+            '<div style="font-weight:700;font-size:15px;color:var(--text);">' +
+              '#' + (i + 1) + ' ' + r.coin + '/USDT' +
+              (lowLiq ? ' <span style="font-size:10px;color:var(--gold);" title="Монета только на одной бирже — низкая ликвидность">⚠️</span>' : '') +
             '</div>' +
-            '<span style="font-size:11px; font-weight:700; color:' + scoreColor + '; white-space:nowrap;">' + scoreLabel + ' ' + score + '/100</span>' +
+            '<div style="font-family:\'JetBrains Mono\',monospace;font-weight:700;font-size:16px;color:' + pctColor + ';">' +
+              (r.bestPct >= 0 ? '+' : '') + r.bestPct.toFixed(2) + '%' +
+            '</div>' +
           '</div>' +
+
+          // % по биржам
+          '<div style="font-size:12px;margin-bottom:8px;">' + exchBadges + '</div>' +
+
+          // Объём суммарный + по биржам
+          '<div style="background:var(--bg);border-radius:6px;padding:7px 10px;margin-bottom:8px;">' +
+            '<div style="font-size:11px;color:var(--muted);margin-bottom:3px;">📊 Объём 24ч суммарно: <span style="color:var(--gold);font-weight:700;">' + formatVol(totalVol) + '</span>' + (lowLiq ? ' <span style="color:var(--gold);font-size:10px;">(только 1 биржа)</span>' : '') + '</div>' +
+            '<div style="font-size:11px;color:var(--text);">' + volByExch + '</div>' +
+          '</div>' +
+
+          // Funding + OI
+          '<div style="display:flex;gap:16px;font-size:11px;color:var(--muted);margin-bottom:8px;">' +
+            '<span>Funding (' + r.bestExch + '): <span style="color:' + fundingColor + ';font-weight:600;">' + fmtVal(det.funding, 4, '%') + '</span></span>' +
+            '<span>OI Δ1ч (' + r.bestExch + '): <span style="color:' + oiColor + ';font-weight:600;">' + fmtVal(det.oiChange, 2, '%') + '</span></span>' +
+          '</div>' +
+
+          // Fade Score полоска
+          '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">' +
+            '<div style="flex:1;height:6px;background:var(--surface2);border-radius:4px;overflow:hidden;">' +
+              '<div style="width:' + score + '%;height:100%;background:' + scoreColor + ';border-radius:4px;transition:width 0.4s;"></div>' +
+            '</div>' +
+            '<span style="font-size:11px;font-weight:700;color:' + scoreColor + ';white-space:nowrap;">' + scoreLabel + ' ' + score + '/100</span>' +
+          '</div>' +
+
+          // Шпаргалка
+          '<div style="background:var(--bg);border-radius:6px;padding:8px 10px;border-left:2px solid ' + hint.color + ';">' +
+            '<span style="font-size:12px;font-weight:700;color:' + hint.color + ';">' + hint.label + '</span>' +
+            '<span style="font-size:11px;color:var(--muted);margin-left:8px;line-height:1.4;">' + hint.tip + '</span>' +
+          '</div>' +
+
         '</div>';
+
     }).join('');
+
+    _hotStartAuto();
 
   } catch (err) {
     statusEl.innerHTML = '<span style="color:var(--danger);">❌ Ошибка: ' + (err && err.message ? err.message : String(err)) + '</span>';
     console.error('hotcoinsScan error:', err);
+    _hotStartAuto();
   } finally {
     if (btn) btn.disabled = false;
   }
