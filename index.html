@@ -811,9 +811,10 @@
       </div>
     </div>
 
-    <div class="btn-group">
-      <button class="btn-calc" onclick="hotcoinsScan()">🔥 Сканировать</button>
-    </div>
+  <div style="display:flex;align-items:center;gap:12px;margin-top:4px;margin-bottom:4px;">
+  <button id="hotcoins-pause-btn" onclick="hotcoinsTogglePause()" class="btn-ghost" style="padding:6px 20px;font-size:13px;min-width:100px;">⏸ Пауза</button>
+  <span id="hotcoins-countdown" style="color:var(--gold);font-size:13px;font-weight:700;font-family:'JetBrains Mono',monospace;"></span>
+</div>
 
     <div id="hotcoins-status" style="font-size:12px; color:var(--muted); margin-top:14px;"></div>
     <div id="hotcoins-result" style="margin-top:10px;"></div>
@@ -1124,28 +1125,69 @@ function profitcalcCalculate() {
 /* ── TAB: Топ перегретых ── */
 let _hotCountdownVal = 60;
 let _hotCountdownInterval = null;
+let _hotPaused = false;
+let _hotRunning = false;
 
-// Останавливаем автообновление при уходе с вкладки
+// Авто-старт при входе на вкладку
 document.getElementById('tabNav').addEventListener('click', function(e) {
   const btn = e.target.closest('.tab-btn');
-  if (btn && btn.dataset.tab !== 'tab-hot') _hotStopAuto();
+  if (!btn) return;
+  if (btn.dataset.tab === 'tab-hot') {
+    if (!_hotRunning && !_hotCountdownInterval) setTimeout(hotcoinsScan, 80);
+  } else {
+    _hotStopAuto();
+  }
 });
+
+// Мгновенный рескан при смене режима Памп ↔ Дамп
+document.querySelectorAll('input[name="hotcoins-mode"]').forEach(function(radio) {
+  radio.addEventListener('change', function() {
+    if (_hotCountdownInterval) { clearInterval(_hotCountdownInterval); _hotCountdownInterval = null; }
+    _hotPaused = false;
+    const pauseBtn = document.getElementById('hotcoins-pause-btn');
+    if (pauseBtn) pauseBtn.textContent = '⏸ Пауза';
+    const cd = document.getElementById('hotcoins-countdown');
+    if (cd) cd.textContent = '⏳';
+    setTimeout(hotcoinsScan, 80);
+  });
+});
+
+function hotcoinsTogglePause() {
+  const pauseBtn = document.getElementById('hotcoins-pause-btn');
+  const cd = document.getElementById('hotcoins-countdown');
+  if (_hotPaused) {
+    _hotPaused = false;
+    if (pauseBtn) pauseBtn.textContent = '⏸ Пауза';
+    _hotStartAuto();
+  } else {
+    _hotPaused = true;
+    if (_hotCountdownInterval) { clearInterval(_hotCountdownInterval); _hotCountdownInterval = null; }
+    if (pauseBtn) pauseBtn.textContent = '▶ Старт';
+    if (cd) cd.textContent = '⏸ на паузе';
+  }
+}
 
 function _hotStopAuto() {
   if (_hotCountdownInterval) { clearInterval(_hotCountdownInterval); _hotCountdownInterval = null; }
+  _hotPaused = false;
   const cd = document.getElementById('hotcoins-countdown');
   if (cd) cd.textContent = '';
+  const pauseBtn = document.getElementById('hotcoins-pause-btn');
+  if (pauseBtn) pauseBtn.textContent = '⏸ Пауза';
 }
 
 function _hotStartAuto() {
-  _hotStopAuto();
+  if (_hotPaused) return;
+  if (_hotCountdownInterval) { clearInterval(_hotCountdownInterval); _hotCountdownInterval = null; }
   _hotCountdownVal = 60;
   _hotUpdateCountdown();
   _hotCountdownInterval = setInterval(function() {
+    if (_hotPaused) return;
     _hotCountdownVal--;
     _hotUpdateCountdown();
     if (_hotCountdownVal <= 0) {
-      _hotStopAuto();
+      clearInterval(_hotCountdownInterval);
+      _hotCountdownInterval = null;
       hotcoinsScan();
     }
   }, 1000);
@@ -1269,7 +1311,6 @@ async function fetchCoinDetails(coin, bestExch, binanceFundingMap, bybitFunding)
   return { funding: funding, oiChange: oiChange };
 }
 
-// Fade Score — только памп + funding + OI. Шпаргалка и объём на скор не влияют.
 function computeFadeScore(bestPct, funding, oiChange, mode) {
   const pumpScore = Math.min(40, (Math.abs(bestPct) / 30) * 40);
   let fundingScore = 0;
@@ -1284,31 +1325,26 @@ function computeFadeScore(bestPct, funding, oiChange, mode) {
   return Math.max(0, Math.min(100, Math.round(pumpScore + fundingScore + oiScore)));
 }
 
-// Шпаргалка — не влияет на скор, только читает те же данные
 function getShortHint(mode, funding, oiChange) {
   if (funding === null) {
     return { label: 'Данных мало ❓', color: 'var(--muted)', tip: 'Funding недоступен — невозможно оценить перекос рынка.' };
   }
   if (mode === 'gainers') {
-    if (funding > 0.05 && oiChange !== null && oiChange > 0) {
+    if (funding > 0.05 && oiChange !== null && oiChange > 0)
       return { label: 'Шорт ✅', color: 'var(--success)', tip: 'Funding > 0.05% + OI растёт — классический fade. Ждите подтверждения на графике (RSI-дивергенция).' };
-    } else if (funding < -0.01) {
+    if (funding < -0.01)
       return { label: 'Не шортить ❌', color: 'var(--danger)', tip: 'Funding отрицательный — шорты уже набиты, высокий риск сквиза вверх.' };
-    } else if (funding > 0.01) {
+    if (funding > 0.01)
       return { label: 'Осторожно ⚠️', color: 'var(--gold)', tip: 'Funding слабоположительный — нет полного подтверждения. Ждите RSI-дивергенцию на 1H.' };
-    } else {
-      return { label: 'Нейтрально ⏸', color: 'var(--muted)', tip: 'Funding около нуля — рынок не определился. Пропустить.' };
-    }
+    return { label: 'Нейтрально ⏸', color: 'var(--muted)', tip: 'Funding около нуля — рынок не определился. Пропустить.' };
   } else {
-    if (funding < -0.05 && oiChange !== null && oiChange <= 0) {
+    if (funding < -0.05 && oiChange !== null && oiChange <= 0)
       return { label: 'Лонг / Сквиз 🔄', color: 'var(--gold)', tip: 'Funding < −0.05% + OI падает — шорт-сквиз назревает. Не шортить, рассмотреть лонг.' };
-    } else if (funding >= -0.01 && oiChange !== null && oiChange > 0) {
+    if (funding >= -0.01 && oiChange !== null && oiChange > 0)
       return { label: 'Шорт ✅', color: 'var(--success)', tip: 'Дамп продолжается: лонги не выкупают, OI растёт — продавцы контролируют рынок.' };
-    } else if (funding < -0.01) {
+    if (funding < -0.01)
       return { label: 'Осторожно ⚠️', color: 'var(--gold)', tip: 'Funding уходит в минус — шортисты накапливаются, риск резкого разворота вверх.' };
-    } else {
-      return { label: 'Нейтрально ⏸', color: 'var(--muted)', tip: 'Недостаточно данных для однозначного вывода.' };
-    }
+    return { label: 'Нейтрально ⏸', color: 'var(--muted)', tip: 'Недостаточно данных для однозначного вывода.' };
   }
 }
 
@@ -1326,15 +1362,17 @@ function fmtVal(v, decimals, suffix) {
 }
 
 async function hotcoinsScan() {
+  if (_hotRunning) return;
+  _hotRunning = true;
+
   const minVol = parseFloat(document.getElementById('hotcoins-minvol').value) || 10000000;
   const mode = document.querySelector('input[name="hotcoins-mode"]:checked').value;
   const statusEl = document.getElementById('hotcoins-status');
   const resultEl = document.getElementById('hotcoins-result');
-  const btn = document.querySelector('#tab-hot .btn-calc');
+  const cd = document.getElementById('hotcoins-countdown');
 
   statusEl.innerHTML = '⏳ Загружаю данные с бирж...';
-  resultEl.innerHTML = '';
-  if (btn) btn.disabled = true;
+  if (cd) cd.textContent = '';
 
   try {
     const sources = [
@@ -1355,7 +1393,7 @@ async function hotcoinsScan() {
     });
 
     if (allTickers.length === 0) {
-      statusEl.innerHTML = '<span style="color:var(--danger);">❌ Не удалось получить данные: ' + failedSources.join(', ') + '</span>';
+      statusEl.innerHTML = '<span style="color:var(--danger);">❌ Нет данных: ' + failedSources.join(', ') + '</span>';
       _hotStartAuto(); return;
     }
 
@@ -1377,30 +1415,25 @@ async function hotcoinsScan() {
     const top10 = rows.slice(0, 10);
 
     if (top10.length === 0) {
-      statusEl.innerHTML = '✅ Источники: ' + okSources.join(', ');
-      resultEl.innerHTML = '<span class="result-empty">Нет монет, проходящих фильтр по объёму. Понизьте порог.</span>';
+      statusEl.innerHTML = '✅ ' + okSources.join(', ');
+      resultEl.innerHTML = '<span class="result-empty">Нет монет, проходящих фильтр. Понизьте порог объёма.</span>';
       _hotStartAuto(); return;
     }
 
-    statusEl.innerHTML = '✅ Источники: ' + okSources.join(', ') +
-      (failedSources.length ? ' &nbsp;|&nbsp; <span style="color:var(--danger);">не удалось: ' + failedSources.join(', ') + '</span>' : '') +
-      ' &nbsp;|&nbsp; ⏳ funding / OI...';
+    statusEl.innerHTML = '⏳ Считаю funding / OI для топ-10...';
 
     const detailsArr = await Promise.all(top10.map(r => {
       const bybitFunding = (r.exch['Bybit'] && r.exch['Bybit'].funding != null) ? r.exch['Bybit'].funding : null;
       return fetchCoinDetails(r.coin, r.bestExch, binanceFundingMap, bybitFunding);
     }));
 
-    statusEl.innerHTML =
-      '✅ ' + okSources.join(', ') +
+    statusEl.innerHTML = '✅ ' + okSources.join(', ') +
       (failedSources.length ? ' &nbsp;|&nbsp; <span style="color:var(--danger);">не удалось: ' + failedSources.join(', ') + '</span>' : '') +
-      ' &nbsp;|&nbsp; ' + new Date().toLocaleTimeString('ru-RU') +
-      ' &nbsp;&nbsp;<span id="hotcoins-countdown" style="color:var(--gold);font-size:11px;"></span>';
+      ' &nbsp;|&nbsp; ' + new Date().toLocaleTimeString('ru-RU');
 
     resultEl.innerHTML = top10.map((r, i) => {
       const det = detailsArr[i] || { funding: null, oiChange: null };
 
-      // % по биржам
       const exchBadges = ['OKX', 'Binance', 'Bybit'].map(ex => {
         const d = r.exch[ex];
         if (!d) return '<span style="color:var(--muted);">' + ex + ': —</span>';
@@ -1408,74 +1441,50 @@ async function hotcoinsScan() {
         return '<span style="color:' + color + ';">' + ex + ': ' + (d.pct >= 0 ? '+' : '') + d.pct.toFixed(2) + '%</span>';
       }).join(' &nbsp;·&nbsp; ');
 
-      // Объём суммарный + по биржам (не влияет на скор)
       const totalVol = Object.values(r.exch).reduce((s, ex) => s + (ex.vol && !isNaN(ex.vol) ? ex.vol : 0), 0);
       const volByExch = ['OKX', 'Binance', 'Bybit']
         .filter(ex => r.exch[ex] && !isNaN(r.exch[ex].vol))
         .map(ex => '<span style="color:var(--muted);">' + ex + ':</span> ' + formatVol(r.exch[ex].vol))
         .join(' &nbsp;·&nbsp; ');
 
-      // Ликвидность
-      const exchCount = Object.keys(r.exch).length;
-      const lowLiq = exchCount < 2;
-
-      // Fade Score (только памп + funding + OI)
+      const lowLiq = Object.keys(r.exch).length < 2;
       const score = computeFadeScore(r.bestPct, det.funding, det.oiChange, mode);
       const scoreColor = score >= 70 ? 'var(--danger)' : score >= 40 ? 'var(--gold)' : 'var(--muted)';
       const scoreLabel = score >= 70 ? '🔥 Перегрето' : score >= 40 ? '⚠️ Разогрето' : '😐 Слабо';
-
       const pctColor = r.bestPct >= 0 ? 'var(--success)' : 'var(--danger)';
       const fundingColor = det.funding !== null && det.funding >= 0 ? 'var(--success)' : 'var(--danger)';
       const oiColor = det.oiChange !== null && det.oiChange >= 0 ? 'var(--success)' : 'var(--danger)';
-
-      // Шпаргалка (не влияет на скор)
       const hint = getShortHint(mode, det.funding, det.oiChange);
 
       return '' +
         '<div class="wallet-card" style="margin-bottom:10px;">' +
-
-          // Заголовок
           '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">' +
             '<div style="font-weight:700;font-size:15px;color:var(--text);">' +
               '#' + (i + 1) + ' ' + r.coin + '/USDT' +
               (lowLiq ? ' <span style="font-size:10px;color:var(--gold);" title="Монета только на одной бирже — низкая ликвидность">⚠️</span>' : '') +
             '</div>' +
-            '<div style="font-family:\'JetBrains Mono\',monospace;font-weight:700;font-size:16px;color:' + pctColor + ';">' +
-              (r.bestPct >= 0 ? '+' : '') + r.bestPct.toFixed(2) + '%' +
-            '</div>' +
+            '<div style="font-family:\'JetBrains Mono\',monospace;font-weight:700;font-size:16px;color:' + pctColor + ';">' + (r.bestPct >= 0 ? '+' : '') + r.bestPct.toFixed(2) + '%</div>' +
           '</div>' +
-
-          // % по биржам
           '<div style="font-size:12px;margin-bottom:8px;">' + exchBadges + '</div>' +
-
-          // Объём суммарный + по биржам
           '<div style="background:var(--bg);border-radius:6px;padding:7px 10px;margin-bottom:8px;">' +
             '<div style="font-size:11px;color:var(--muted);margin-bottom:3px;">📊 Объём 24ч суммарно: <span style="color:var(--gold);font-weight:700;">' + formatVol(totalVol) + '</span>' + (lowLiq ? ' <span style="color:var(--gold);font-size:10px;">(только 1 биржа)</span>' : '') + '</div>' +
             '<div style="font-size:11px;color:var(--text);">' + volByExch + '</div>' +
           '</div>' +
-
-          // Funding + OI
           '<div style="display:flex;gap:16px;font-size:11px;color:var(--muted);margin-bottom:8px;">' +
             '<span>Funding (' + r.bestExch + '): <span style="color:' + fundingColor + ';font-weight:600;">' + fmtVal(det.funding, 4, '%') + '</span></span>' +
             '<span>OI Δ1ч (' + r.bestExch + '): <span style="color:' + oiColor + ';font-weight:600;">' + fmtVal(det.oiChange, 2, '%') + '</span></span>' +
           '</div>' +
-
-          // Fade Score полоска
           '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">' +
             '<div style="flex:1;height:6px;background:var(--surface2);border-radius:4px;overflow:hidden;">' +
               '<div style="width:' + score + '%;height:100%;background:' + scoreColor + ';border-radius:4px;transition:width 0.4s;"></div>' +
             '</div>' +
             '<span style="font-size:11px;font-weight:700;color:' + scoreColor + ';white-space:nowrap;">' + scoreLabel + ' ' + score + '/100</span>' +
           '</div>' +
-
-          // Шпаргалка
           '<div style="background:var(--bg);border-radius:6px;padding:8px 10px;border-left:2px solid ' + hint.color + ';">' +
             '<span style="font-size:12px;font-weight:700;color:' + hint.color + ';">' + hint.label + '</span>' +
             '<span style="font-size:11px;color:var(--muted);margin-left:8px;line-height:1.4;">' + hint.tip + '</span>' +
           '</div>' +
-
         '</div>';
-
     }).join('');
 
     _hotStartAuto();
@@ -1485,7 +1494,7 @@ async function hotcoinsScan() {
     console.error('hotcoinsScan error:', err);
     _hotStartAuto();
   } finally {
-    if (btn) btn.disabled = false;
+    _hotRunning = false;
   }
 }
 
